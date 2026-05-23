@@ -24,7 +24,7 @@ services:
       - "8080:8080"
     environment:
       - ConnectionStrings__DefaultConnection=Data Source=db:1521/XEPDB1;User Id=system;Password=ClyvoChallenge2026!;
-      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_ENVIRONMENT=Development
     networks:
       - clyvo_network
 
