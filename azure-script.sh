@@ -1,4 +1,4 @@
-```bash
+#!/bin/bash
 
 RESOURCE_GROUP="clyvovet-rg"
 LOCATION="canadacentral"
@@ -18,11 +18,9 @@ az vm create \
   --public-ip-sku Standard
 
 echo "Abrindo portas (80, 8080, 1521)..."
-
 az vm open-port --resource-group $RESOURCE_GROUP --name $VM_NAME --port 80 --priority 1001
 az vm open-port --resource-group $RESOURCE_GROUP --name $VM_NAME --port 8080 --priority 1002
 az vm open-port --resource-group $RESOURCE_GROUP --name $VM_NAME --port 1521 --priority 1003
-
 
 echo "Instalando Docker e ferramentas essenciais..."
 az vm extension set \
