@@ -1,13 +1,13 @@
 # 🐾 DevOps Challenge - CLYVO VET
 
-## 📋 Sobre o Projeto
+## Sobre o Projeto
 Este repositório contém a infraestrutura conteinerizada e os scripts de automatização para a API da **CLYVO VET**. O projeto consiste numa Web API desenvolvida em **.NET 9.0** integrada com um banco de dados **Oracle Express Edition (XE)**. 
 
 O foco desta entrega é garantir que a aplicação funcione de forma isolada, segura e automatizada, tanto em ambiente de desenvolvimento local quanto em produção na nuvem da Microsoft Azure.
 
 ---
 
-## 🎥 Vídeo de Demonstração
+## Vídeo de Demonstração
 > []
 
 No vídeo demonstramos:
@@ -17,7 +17,7 @@ No vídeo demonstramos:
 
 ---
 
-## 🚀 Tecnologias e Ferramentas
+## Tecnologias e Ferramentas
 
 * **Backend:** .NET 9.0 (ASP.NET Core)
 * **Banco de Dados:** Oracle Express Edition (XE)
@@ -28,7 +28,7 @@ No vídeo demonstramos:
 
 ---
 
-## 🛠️ Boas Práticas Implementadas (Checklist DevOps)
+## Boas Práticas Implementadas (Checklist DevOps)
 
 Para garantir a segurança e resiliência da aplicação, as seguintes regras foram rigorosamente aplicadas:
 
@@ -39,7 +39,7 @@ Para garantir a segurança e resiliência da aplicação, as seguintes regras fo
 
 ---
 
-## 📂 Estrutura de Arquivos DevOps
+## Estrutura de Arquivos DevOps
 
 * Dockerfile: Receita de construção da imagem da API C#. Possui sistema de build em múltiplos estágios (multi-stage build) para deixar a imagem final mais leve.
 * docker-compose.yml: Orquestrador dos serviços. Sobe o banco de dados Oracle e a API simultaneamente, passando as variáveis de ambiente corretas (Strings de conexão e ambiente de Development para expor o Swagger).
@@ -47,7 +47,7 @@ Para garantir a segurança e resiliência da aplicação, as seguintes regras fo
 
 ---
 
-## 💻 Como Executar Localmente
+## Como Executar Localmente
 
 Pré-requisitos: Docker Desktop em execução.
 
