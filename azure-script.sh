@@ -1,7 +1,7 @@
 #!/bin/bash
 
 RESOURCE_GROUP="clyvovet-rg"
-LOCATION="canadacentral"
+LOCATION="eastus"
 VM_NAME="clyvovet-vm"
 ADMIN_USER="azureuser"
 
@@ -15,7 +15,8 @@ az vm create \
   --image Ubuntu2204 \
   --admin-username $ADMIN_USER \
   --generate-ssh-keys \
-  --public-ip-sku Standard
+  --public-ip-sku Standard \
+  --size Standard_B2s
 
 echo "Abrindo portas (80, 8080, 1521)..."
 az vm open-port --resource-group $RESOURCE_GROUP --name $VM_NAME --port 80 --priority 1001
