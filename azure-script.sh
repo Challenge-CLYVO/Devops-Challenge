@@ -1,21 +1,22 @@
 #!/bin/bash
 
-RESOURCE_GROUP="clyvo-rg"
-LOCATION="brazilsouth"
-VM_NAME="clyvo-vm"
+RESOURCE_GROUP="clyvo-rg-canada-final"
+LOCATION="canadacentral"
+VM_NAME="clyvo-vm-canada"
 ADMIN_USER="azureuser"
 
 echo "Criando Resource Group..."
 az group create --name $RESOURCE_GROUP --location $LOCATION
 
-echo "Criando Máquina Virtual..."
+echo "Criando Máquina Virtual (Tamanho: Standard_B2as_v2)..."
 az vm create \
   --resource-group $RESOURCE_GROUP \
   --name $VM_NAME \
   --image Ubuntu2204 \
   --admin-username $ADMIN_USER \
   --generate-ssh-keys \
-  --public-ip-sku Standard
+  --public-ip-sku Standard \
+  --size Standard_B2as_v2
 
 echo "Abrindo portas (80, 8080, 1521)..."
 az vm open-port --resource-group $RESOURCE_GROUP --name $VM_NAME --port 80 --priority 1001
@@ -30,4 +31,4 @@ az vm extension set \
   --publisher Microsoft.Azure.Extensions \
   --settings '{"commandToExecute": "apt-get update && apt-get install -y git nano && curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh && usermod -aG docker azureuser"}'
 
-echo "Infraestrutura provisionada com sucesso em Paris!"
+echo "Infraestrutura provisionada com sucesso no Canadá!"
