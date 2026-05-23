@@ -1,8 +1,8 @@
 #!/bin/bash
 
-RESOURCE_GROUP="clyvovet-rg"
-LOCATION="eastus"
-VM_NAME="clyvovet-vm"
+RESOURCE_GROUP="clyvo-rg-fr"
+LOCATION="francecentral"
+VM_NAME="clyvo-vm-fr"
 ADMIN_USER="azureuser"
 
 echo "Criando Resource Group..."
@@ -15,8 +15,7 @@ az vm create \
   --image Ubuntu2204 \
   --admin-username $ADMIN_USER \
   --generate-ssh-keys \
-  --public-ip-sku Standard \
-  --size Standard_B2s
+  --public-ip-sku Standard
 
 echo "Abrindo portas (80, 8080, 1521)..."
 az vm open-port --resource-group $RESOURCE_GROUP --name $VM_NAME --port 80 --priority 1001
@@ -31,4 +30,4 @@ az vm extension set \
   --publisher Microsoft.Azure.Extensions \
   --settings '{"commandToExecute": "apt-get update && apt-get install -y git nano && curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh && usermod -aG docker azureuser"}'
 
-echo "Infraestrutura provisionada com sucesso!"
+echo "Infraestrutura provisionada com sucesso em Paris!"
