@@ -1,8 +1,8 @@
 #!/bin/bash
 
-RESOURCE_GROUP="clyvo-rg-fr"
-LOCATION="francecentral"
-VM_NAME="clyvo-vm-fr"
+RESOURCE_GROUP="clyvo-rg"
+LOCATION="brazilsouth"
+VM_NAME="clyvo-vm"
 ADMIN_USER="azureuser"
 
 echo "Criando Resource Group..."
