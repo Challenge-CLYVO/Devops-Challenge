@@ -8,7 +8,7 @@ O foco desta entrega é garantir que a aplicação funcione de forma isolada, se
 ---
 
 ## Vídeo de Demonstração
-> []
+> [https://www.youtube.com/watch?v=5LtY5tKcXy0]
 
 No vídeo demonstramos:
 1. Execução do Script Azure CLI provisionando a infraestrutura do zero.
