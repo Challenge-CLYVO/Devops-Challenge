@@ -1,17 +1,21 @@
 using System.Text.Json;
 using PetCare.Application.Exceptions;
+using PetCare.API.Metrics;
 
 namespace PetCare.API.Middlewares;
 
 public class ExceptionMiddleware
 {
     private readonly RequestDelegate _next;
+    private readonly ILogger<ExceptionMiddleware> _logger;
 
-    public ExceptionMiddleware(RequestDelegate next)
+    public ExceptionMiddleware(
+        RequestDelegate next,
+        ILogger<ExceptionMiddleware> logger)
     {
         _next = next;
+        _logger = logger;
     }
-
     public async Task InvokeAsync(HttpContext context)
     {
         try
@@ -21,9 +25,17 @@ public class ExceptionMiddleware
 
         catch (NotFoundException ex)
         {
+            PetCareMetrics.HttpErrors.Add(1);
+            
+            _logger.LogWarning(
+                ex,
+                "Recurso não encontrado. Path: {Path}",
+                context.Request.Path);
+
             context.Response.ContentType = "application/json";
 
-            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            context.Response.StatusCode =
+                StatusCodes.Status404NotFound;
 
             var response = new
             {
@@ -38,9 +50,17 @@ public class ExceptionMiddleware
 
         catch (Exception ex)
         {
+            PetCareMetrics.HttpErrors.Add(1);
+
+            _logger.LogError(
+                ex,
+                "Erro interno não tratado. Path: {Path}",
+                context.Request.Path);
+
             context.Response.ContentType = "application/json";
 
-            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            context.Response.StatusCode =
+                StatusCodes.Status500InternalServerError;
 
             var response = new
             {

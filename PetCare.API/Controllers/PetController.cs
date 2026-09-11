@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using PetCare.Application.DTOs.Pet;
 using PetCare.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 
 namespace PetCare.API.Controllers;
 
@@ -9,6 +10,7 @@ namespace PetCare.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class PetController : ControllerBase
 {
     private readonly IPetService _service;

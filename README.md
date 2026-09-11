@@ -1,103 +1,215 @@
-# 🐾 DevOps Challenge - CLYVO VET
+# PetCare API — Challenge FIAP 2026 | DevOps Tools & Cloud Computing
 
-## Sobre o Projeto
-Este repositório contém a infraestrutura conteinerizada e os scripts de automatização para a API da **CLYVO VET**. O projeto consiste numa Web API desenvolvida em **.NET 9.0** integrada com um banco de dados **Oracle Express Edition (XE)**. 
+**Aluno:** Henrique Teixeira Cesar | **RM:** 563088
 
-O foco desta entrega é garantir que a aplicação funcione de forma isolada, segura e automatizada, tanto em ambiente de desenvolvimento local quanto em produção na nuvem da Microsoft Azure.
+**Aluno:** Lucas Rafael Solimene | **RM:** 565194
 
----
+**Aluno:** Samyr Couto Oliveira | **RM:** 565562
 
-## Vídeo de Demonstração
-> [https://www.youtube.com/watch?v=5LtY5tKcXy0]
+**Turma:** 2TDSPF | 
+**Empresa:** Clyvo Vet | 
+**Disciplina:** DevOps Tools & Cloud Computing — Sprint 3 | 
 
-No vídeo demonstramos:
-1. Execução do Script Azure CLI provisionando a infraestrutura do zero.
-2. Construção e subida dos containers com Docker Compose na Máquina Virtual.
-3. Demonstração da API (Swagger) e do Banco de Dados rodando em nuvem.
 
 ---
 
-## Tecnologias e Ferramentas
+## Descrição da Solução
 
-* **Backend:** .NET 9.0 (ASP.NET Core)
-* **Banco de Dados:** Oracle Express Edition (XE)
-* **Orquestração de Containers:** Docker & Docker Compose
-* **Cloud Provider:** Microsoft Azure
-* **Infraestrutura como Código:** Bash Script (Azure CLI)
-* **Controle de Versão:** Git & GitHub
+O **PetCare** é uma API REST desenvolvida em **.NET 9**, seguindo os princípios de **Clean Architecture**, criada como solução para a **Clyvo Vet**, uma clínica veterinária que precisava digitalizar o controle de tutores, pets, consultas, vacinas e histórico de saúde dos animais atendidos.
 
----
+A API permite o cadastro e gerenciamento completo de:
 
-## Boas Práticas Implementadas (Checklist DevOps)
+- **Tutores** — donos dos pets
+- **Pets** — animais vinculados a um tutor
+- **Clínicas** — unidades de atendimento
+- **Vacinas** — catálogo de vacinas disponíveis
+- **Aplicações de Vacina** — histórico de vacinação de cada pet
+- **Consultas** — atendimentos realizados em uma clínica
+- **Histórico de Saúde** — registros gerais de saúde do pet
 
-Para garantir a segurança e resiliência da aplicação, as seguintes regras foram rigorosamente aplicadas:
+A autenticação é feita via **JWT (JSON Web Token)**, protegendo os endpoints sensíveis (como os de `Pet`) contra acesso não autorizado.
 
-- [x] **Privilégio Mínimo (Non-Root):** O Dockerfile possui a instrução USER app, garantindo que a aplicação rode sem privilégios de administrador dentro do container.
-- [x] **Persistência de Dados:** O docker-compose.yml utiliza volumes nomeados (oracle_data) atrelados ao diretório /opt/oracle/oradata, evitando perda de dados do banco de dados na recriação dos containers.
-- [x] **Rede Isolada:** Criação de rede customizada (clyvo_network) do tipo bridge, isolando a comunicação entre API e Banco de Dados.
-- [x] **Automatização de Infra (IaC):** Uso de script .sh com comandos nativos do Azure CLI (az vm create, az vm open-port, az vm extension set) para evitar trabalho manual no portal.
+Nesta Sprint, o foco foi levar essa aplicação para a nuvem, containerizando tanto a API quanto o banco de dados, e automatizando o processo de deploy na **Microsoft Azure**.
 
----
+## Benefício de Negócio
 
-## Estrutura de Arquivos DevOps
+Para a Clyvo Vet, essa solução representa:
 
-* Dockerfile: Receita de construção da imagem da API C#. Possui sistema de build em múltiplos estágios (multi-stage build) para deixar a imagem final mais leve.
-* docker-compose.yml: Orquestrador dos serviços. Sobe o banco de dados Oracle e a API simultaneamente, passando as variáveis de ambiente corretas (Strings de conexão e ambiente de Development para expor o Swagger).
-* azure-script.sh: Script responsável por criar o Resource Group, a Máquina Virtual, abrir as portas de firewall (80, 8080, 1521) e instalar o ecossistema Docker diretamente na nuvem.
+- **Centralização de dados**: histórico completo de cada pet acessível em um único sistema, eliminando fichas em papel ou planilhas soltas.
+- **Escalabilidade**: por rodar em containers na nuvem, a infraestrutura pode crescer conforme a clínica expande (novas unidades, mais pets cadastrados) sem necessidade de reestruturação.
+- **Disponibilidade**: a aplicação fica acessível via internet, permitindo que veterinários consultem o histórico de um pet em qualquer unidade da rede.
+- **Segurança**: autenticação via JWT garante que apenas usuários autorizados alterem dados sensíveis (cadastro de pets).
+- **Redução de custo operacional**: a arquitetura containerizada com Azure Container Instances (ACI) permite pagar apenas pelos recursos efetivamente utilizados, sem manter servidores dedicados ociosos.
 
----
+## Arquitetura da Solução
 
-## Como Executar Localmente
+A solução foi entregue na modalidade **ACR + ACI** (Azure Container Registry + Azure Container Instances), com **aplicação e banco de dados totalmente containerizados**.
 
-Pré-requisitos: Docker Desktop em execução.
+```mermaid
+flowchart TB
+    subgraph Local["Ambiente Local"]
+        DEV[Docker Desktop]
+    end
 
-1. Clone o repositório:
-```bash
-git clone [https://github.com/Challenge-CLYVO/Devops-Challenge.git](https://github.com/Challenge-CLYVO/Devops-Challenge.git)
-cd Devops-Challenge
+    subgraph Azure["Microsoft Azure - Resource Group: clyvo-devops-rg"]
+        ACR["Azure Container Registry\nclyvopetcareacr.azurecr.io"]
+
+        subgraph ACI["Azure Container Instance - clyvo-petcare-group"]
+            API["Container: clyvo-petcare-api\nPetCare API (.NET 9)\nporta 8080"]
+            DB["Container: clyvo-oracle-db\nOracle XE (gvenzl/oracle-xe)\nporta 1521"]
+        end
+    end
+
+    USER["Usuário / Cliente\n(Swagger, Postman, App)"]
+
+    DEV -->|"docker build\ndocker push"| ACR
+    ACR -->|"pull da imagem"| API
+    API -->|"conexão local (localhost)\ndentro do mesmo grupo ACI"| DB
+    USER -->|"HTTP :8080\n/swagger, /api/*"| API
 ```
 
-2. Suba os containers:
-```bash
-docker compose up -d --build
+### Componentes
+
+| Componente | Descrição |
+|---|---|
+| **Resource Group** | `clyvo-devops-rg`, região `brazilsouth` |
+| **Azure Container Registry (ACR)** | `clyvopetcareacr`, SKU Basic, armazena a imagem da API |
+| **Azure Container Instance (ACI)** | Grupo de containers `clyvo-petcare-group`, com 2 containers no mesmo grupo (comunicação via `localhost`) |
+| **Container da API** | `clyvo-petcare-api`, imagem `clyvopetcareacr.azurecr.io/petcare-api:v1`, porta 8080 |
+| **Container do Banco** | `clyvo-oracle-db`, imagem `gvenzl/oracle-xe:latest`, porta 1521 |
+| **DNS público** | `petcarerm563088.brazilsouth.azurecontainer.io` |
+
+### Por que ACR + ACI?
+
+Essa opção foi escolhida por atender ao requisito de a solução ficar totalmente containerizada, sem depender de serviços gerenciados de banco de dados da Azure o Oracle roda como um container próprio, dentro do mesmo grupo de containers da API, permitindo comunicação direta via `localhost`.
+
+## Containerização
+
+O `Dockerfile` da API utiliza **multi-stage build**, reduzindo o tamanho final da imagem, e executa a aplicação com um usuário não-root (`USER app`), seguindo boas práticas de segurança em containers.
+
+```dockerfile
+# Build multi-stage
+# Estágio 1: build da aplicação .NET
+# Estágio 2: imagem final, enxuta, rodando como usuário não-root "app"
+# Porta exposta: 8080
+# ENV ASPNETCORE_URLS=http://+:8080
 ```
 
-3. Acesse a documentação da API:
-* URL: http://localhost:8080/swagger
+## Passo a Passo do Deploy no Azure
 
----
+### 1. Criar o Resource Group
 
-## ☁️ Implantação na Nuvem (Microsoft Azure)
-
-O ambiente de nuvem foi planejado para rodar no Canadá Central (canadacentral), utilizando uma VM Standard_B2as_v2 para otimização de custos e recursos.
-
-Passo a Passo do Deploy:
-1. Acesse o Azure Cloud Shell (Bash) através do Portal da Azure.
-2. Baixe o código e execute o script de provisionamento:
 ```bash
-git clone [https://github.com/Challenge-CLYVO/Devops-Challenge.git](https://github.com/Challenge-CLYVO/Devops-Challenge.git)
-cd Devops-Challenge
-chmod +x azure-script.sh
-./azure-script.sh
+az group create --name clyvo-devops-rg --location brazilsouth
 ```
 
-3. Aguarde a mensagem "Infraestrutura provisionada com sucesso no Canadá!" e conecte-se à VM utilizando o IP público gerado:
+### 2. Criar o Azure Container Registry (ACR)
+
 ```bash
-ssh azureuser@<IP_PUBLICO_GERADO>
+az acr create --resource-group clyvo-devops-rg --name clyvopetcareacr --sku Basic --admin-enabled true
 ```
 
-4. Dentro da VM, inicie a aplicação:
+### 3. Build e push da imagem (build local, via Docker Desktop)
+
+> **Observação importante:** a assinatura de estudante da FIAP bloqueia o uso de `az acr build` (erro `TasksOperationsNotAllowed`). Por isso, o build foi feito **localmente**, no Docker Desktop, com push manual para o ACR.
+
 ```bash
-git clone [https://github.com/Challenge-CLYVO/Devops-Challenge.git](https://github.com/Challenge-CLYVO/Devops-Challenge.git)
-cd Devops-Challenge
-docker compose up -d --build
+# Login no ACR
+docker login clyvopetcareacr.azurecr.io -u <usuario> -p <senha>
+
+# Build da imagem
+docker build -t clyvopetcareacr.azurecr.io/petcare-api:v1 .
+
+# Push para o ACR
+docker push clyvopetcareacr.azurecr.io/petcare-api:v1
 ```
 
-5. Teste o funcionamento no navegador: http://<IP_PUBLICO_GERADO>:8080/swagger
+### 4. Criar o grupo de containers (ACI) com API + banco
 
----
+Foi criado um arquivo `aci-container-group.yaml` definindo os dois containers (API e Oracle) no mesmo grupo, permitindo comunicação via `localhost`:
 
-## 👥 Autores do Projeto (FIAP)
-* Henrique Teixeira - RM: 563088
-* Lucas Rafael Solimene - RM: 565194
-* Samyr Couto Oliveira - RM: 565562
+```bash
+az container create --resource-group clyvo-devops-rg --file aci-container-group.yaml
+```
+
+O YAML define:
+- Container `clyvo-oracle-db`, imagem `gvenzl/oracle-xe:latest`, porta `1521`, variável `ORACLE_PASSWORD`
+- Container `clyvo-petcare-api`, imagem do ACR, porta `8080`, variáveis de conexão (`ConnectionStrings__...`) e JWT (`Jwt__Key`, `Jwt__Issuer`, `Jwt__Audience`)
+- DNS label público: `petcarerm563088`
+
+### 5. Obter o endereço público (FQDN)
+
+```bash
+az container show --resource-group clyvo-devops-rg --name clyvo-petcare-group --query ipAddress.fqdn -o tsv
+```
+
+Resultado: `petcarerm563088.brazilsouth.azurecontainer.io`
+
+### 6. Verificar logs
+
+```bash
+az container logs --resource-group clyvo-devops-rg --name clyvo-petcare-group --container-name clyvo-petcare-api
+az container logs --resource-group clyvo-devops-rg --name clyvo-petcare-group --container-name clyvo-oracle-db
+```
+
+> O Oracle XE demora alguns minutos para inicializar completamente — é normal a API apresentar erro de conexão nos primeiros minutos após o deploy.
+
+### 7. Criar as tabelas no banco
+
+Conectar no Oracle (via SQL Developer ou outra ferramenta) usando:
+
+- **Host:** `petcarerm563088.brazilsouth.azurecontainer.io`
+- **Porta:** `1521`
+- **Service Name:** `XEPDB1`
+- **Usuário:** `system`
+
+E executar o script `script_bd.sql`, que cria todas as tabelas (`Tutor`, `Pet`, `Clinica`, `Vacina`, `Aplicacao_vacina`, `Consulta`, `Historico_saude`) e insere dados de exemplo.
+
+## Autenticação e Testando o CRUD
+
+1. Acessar o Swagger: `http://petcarerm563088.brazilsouth.azurecontainer.io:8080/swagger`
+2. Fazer login em `POST /api/Auth/login` para obter o token JWT
+3. Clicar em **Authorize** (canto superior direito) e informar `Bearer {token}`
+4. Testar os endpoints de `/api/Pet` (protegidos por JWT) e `/api/Tutor` (não exige token)
+
+### Endpoints de exemplo (Pet)
+
+**Criar (POST /api/Pet):**
+```json
+{
+  "nome": "Rex",
+  "idade": 4,
+  "especie": "Cachorro",
+  "raca": "Labrador",
+  "idTutor": 1
+}
+```
+
+**Atualizar (PUT /api/Pet/{id}):**
+```json
+{
+  "idPet": 1,
+  "nome": "Thor",
+  "idade": 5,
+  "especie": "Cachorro",
+  "raca": "Golden Retriever",
+  "idTutor": 1
+}
+```
+
+**Remover (DELETE /api/Pet/{id})**
+
+## Arquivos Relevantes do Repositório
+
+| Arquivo | Descrição |
+|---|---|
+| `script_bd.sql` | Script de criação das tabelas e inserts de dados de exemplo |
+| `docker-compose.yml` | Orquestração para execução local do projeto |
+| `.env.example` | Modelo de variáveis de ambiente (sem senhas reais) |
+| `aci-container-group.yaml` | Definição do grupo de containers do Azure (API + banco) |
+| `Dockerfile` | Definição da imagem da API (multi-stage build) |
+
+## Links
+
+- **Repositório GitHub:** https://github.com/HenriqueTCesar/Devops-Challenge.git
+- **Vídeo demonstrativo:** 
