@@ -212,4 +212,4 @@ E executar o script `script_bd.sql`, que cria todas as tabelas (`Tutor`, `Pet`, 
 ## Links
 
 - **Repositório GitHub:** https://github.com/HenriqueTCesar/Devops-Challenge.git
-- **Vídeo demonstrativo:** 
+- **Vídeo demonstrativo:** https://youtu.be/pCz5PNMeqJ0
