@@ -1,0 +1,393 @@
+trigger: none
+
+resources:
+  pipelines:
+    - pipeline: ci
+      source: PetCare-CI
+      trigger:
+        branches:
+          include:
+            - master
+
+pool:
+  name: Default
+
+variables:
+  - group: PetCare-Production
+
+steps:
+  # 1. Baixar o artefato gerado pelo CI
+  - download: ci
+    artifact: drop
+
+  # 2. Validar o artefato recebido
+  - powershell: |
+      $artifactPath = "$(Pipeline.Workspace)\ci\drop"
+
+      if (!(Test-Path $artifactPath)) {
+          throw "O artefato do CI não foi encontrado: $artifactPath"
+      }
+
+      Write-Host "Artefato recebido com sucesso."
+      Get-ChildItem $artifactPath
+    displayName: Validate CI artifact
+
+  # 3. Implantar a API no Azure Container Instances
+  - task: AzureCLI@2
+    displayName: Deploy PetCare to Azure Container Instances
+    inputs:
+      azureSubscription: sc-azure-petcare
+      scriptType: ps
+      scriptLocation: inlineScript
+      inlineScript: |
+        $ErrorActionPreference = "Stop"
+
+        # ==========================================
+        # 1. CARREGAR VARIÁVEIS
+        # ==========================================
+
+        $resourceGroup = $env:AZURE_RESOURCE_GROUP
+        $acrName = $env:ACR_NAME
+        $aciName = $env:ACI_NAME
+        $dnsLabel = $env:ACI_DNS_LABEL
+        $oracleConnection = $env:ORACLE_CONNECTION_STRING
+        $jwtKey = $env:JWT_KEY
+        $ciRunId = $env:CI_RUN_ID
+
+        $requiredVariables = @{
+            AZURE_RESOURCE_GROUP = $resourceGroup
+            ACR_NAME = $acrName
+            ACI_NAME = $aciName
+            ACI_DNS_LABEL = $dnsLabel
+            ORACLE_CONNECTION_STRING = $oracleConnection
+            JWT_KEY = $jwtKey
+            CI_RUN_ID = $ciRunId
+        }
+
+        foreach ($variable in $requiredVariables.GetEnumerator()) {
+            if ([string]::IsNullOrWhiteSpace($variable.Value)) {
+                throw "A variável obrigatória $($variable.Key) não foi configurada."
+            }
+        }
+
+        if ($jwtKey -match '^\$\([^)]+\)$') {
+            throw "JWT_KEY contém uma referência de variável não resolvida."
+        }
+
+        if ($jwtKey.Length -lt 32) {
+            throw "JWT_KEY precisa ter pelo menos 32 caracteres."
+        }
+
+        # Registrar segredos para mascaramento nos logs
+        Write-Host "##vso[task.setsecret]$jwtKey"
+        Write-Host "##vso[task.setsecret]$oracleConnection"
+
+        Write-Host "Variáveis obrigatórias validadas."
+        Write-Host "Resource Group: $resourceGroup"
+        Write-Host "ACR: $acrName"
+        Write-Host "ACI: $aciName"
+        Write-Host "CI Run ID: $ciRunId"
+
+        # ==========================================
+        # 2. OBTER LOCALIZAÇÃO DO RESOURCE GROUP
+        # ==========================================
+
+        Write-Host "Obtendo localização do Resource Group..."
+
+        $location = az group show `
+            --name $resourceGroup `
+            --query location `
+            --output tsv `
+            --only-show-errors
+
+        if ($LASTEXITCODE -ne 0 -or
+            [string]::IsNullOrWhiteSpace($location)) {
+            throw "Não foi possível obter a localização do Resource Group."
+        }
+
+        Write-Host "Localização: $location"
+
+        # ==========================================
+        # 3. VALIDAR ACESSO AO ACR
+        # ==========================================
+
+        Write-Host "Verificando o Azure Container Registry..."
+
+        $acrInfoJson = az acr show `
+            --name $acrName `
+            --resource-group $resourceGroup `
+            --output json `
+            --only-show-errors
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Não foi possível localizar o ACR '$acrName'."
+        }
+
+        $acrInfo = $acrInfoJson | ConvertFrom-Json
+        $acrLoginServer = $acrInfo.loginServer
+
+        if ([string]::IsNullOrWhiteSpace($acrLoginServer)) {
+            throw "O Azure não retornou o Login Server do ACR."
+        }
+
+        Write-Host "ACR encontrado: $acrLoginServer"
+
+        # ==========================================
+        # 4. OBTER CREDENCIAIS DO ACR
+        # ==========================================
+
+        Write-Host "Obtendo credenciais do ACR..."
+
+        $acrCredentialsJson = az acr credential show `
+            --name $acrName `
+            --resource-group $resourceGroup `
+            --output json `
+            --only-show-errors
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Não foi possível obter as credenciais do ACR. Verifique se o usuário administrador está habilitado."
+        }
+
+        $acrCredentials = $acrCredentialsJson | ConvertFrom-Json
+
+        $acrUser = $acrCredentials.username
+        $acrPassword = $acrCredentials.passwords[0].value
+
+        if ([string]::IsNullOrWhiteSpace($acrUser) -or
+            [string]::IsNullOrWhiteSpace($acrPassword)) {
+            throw "As credenciais do ACR não foram retornadas corretamente."
+        }
+
+        # Registrar senha do ACR para mascaramento
+        Write-Host "##vso[task.setsecret]$acrPassword"
+
+        Write-Host "Credenciais do ACR obtidas com sucesso."
+
+        # ==========================================
+        # 5. DEFINIR IMAGEM DO CONTAINER
+        # ==========================================
+
+        $image = "$acrLoginServer/petcare-api:$ciRunId"
+
+        Write-Host "Imagem selecionada: $image"
+
+        # ==========================================
+        # 6. VERIFICAR CONTAINER ANTERIOR
+        # ==========================================
+
+        Write-Host "Verificando container anterior..."
+
+        $existingContainer = az container list `
+            --resource-group $resourceGroup `
+            --query "[?name=='$aciName'].name | [0]" `
+            --output tsv `
+            --only-show-errors
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Não foi possível consultar os containers existentes."
+        }
+
+        if (![string]::IsNullOrWhiteSpace($existingContainer)) {
+
+            Write-Host "Container anterior encontrado. Removendo..."
+
+            az container delete `
+                --resource-group $resourceGroup `
+                --name $aciName `
+                --yes `
+                --only-show-errors
+
+            if ($LASTEXITCODE -ne 0) {
+                throw "Não foi possível remover o container anterior."
+            }
+
+            Write-Host "Aguardando a remoção do container anterior..."
+
+            $removed = $false
+
+            for ($attempt = 1; $attempt -le 60; $attempt++) {
+
+                $remainingContainer = az container list `
+                    --resource-group $resourceGroup `
+                    --query "[?name=='$aciName'].name | [0]" `
+                    --output tsv `
+                    --only-show-errors
+
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Falha ao verificar a remoção do container."
+                }
+
+                if ([string]::IsNullOrWhiteSpace($remainingContainer)) {
+                    $removed = $true
+                    break
+                }
+
+                Start-Sleep -Seconds 5
+            }
+
+            if (!$removed) {
+                throw "O container anterior não foi removido dentro do tempo esperado."
+            }
+
+            Write-Host "Container anterior removido com sucesso."
+        }
+        else {
+            Write-Host "Nenhum container anterior encontrado. Primeira implantação."
+        }
+
+        # ==========================================
+        # 7. CRIAR NOVO CONTAINER
+        # ==========================================
+
+        Write-Host "Criando novo container no Azure..."
+
+        $createArgs = @(
+            "container",
+            "create",
+            "--resource-group", $resourceGroup,
+            "--location", $location,
+            "--name", $aciName,
+            "--image", $image,
+            "--os-type", "Linux",
+            "--ip-address", "Public",
+            "--registry-login-server", $acrLoginServer,
+            "--registry-username", $acrUser,
+            "--registry-password", $acrPassword,
+            "--dns-name-label", $dnsLabel,
+            "--ports", "8080",
+            "--cpu", "1",
+            "--memory", "1.5",
+            "--restart-policy", "Always",
+            "--environment-variables",
+            "ASPNETCORE_ENVIRONMENT=Production",
+            "ASPNETCORE_URLS=http://+:8080",
+            "Jwt__Issuer=PetCare.API",
+            "Jwt__Audience=PetCare.Client",
+            "--secure-environment-variables",
+            "ConnectionStrings__RecommendaContextOracle=$oracleConnection",
+            "Jwt__Key=$jwtKey",
+            "--only-show-errors",
+            "--output", "none"
+        )
+
+        az @createArgs
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Falha ao criar o container no Azure."
+        }
+
+        Write-Host "Solicitação de criação enviada com sucesso."
+
+        # ==========================================
+        # 8. AGUARDAR PROVISIONAMENTO
+        # ==========================================
+
+        Write-Host "Aguardando provisionamento do container..."
+
+        $provisioned = $false
+
+        for ($attempt = 1; $attempt -le 60; $attempt++) {
+
+            $provisioningState = az container show `
+                --resource-group $resourceGroup `
+                --name $aciName `
+                --query provisioningState `
+                --output tsv `
+                --only-show-errors
+
+            if ($LASTEXITCODE -ne 0) {
+                throw "Não foi possível consultar o provisionamento do container."
+            }
+
+            Write-Host "Tentativa $attempt/60 - Provisionamento: $provisioningState"
+
+            if ($provisioningState -eq "Succeeded") {
+                $provisioned = $true
+                break
+            }
+
+            if ($provisioningState -eq "Failed") {
+                throw "O Azure informou falha no provisionamento do container."
+            }
+
+            Start-Sleep -Seconds 10
+        }
+
+        if (!$provisioned) {
+            throw "O container não foi provisionado dentro do tempo esperado."
+        }
+
+        Write-Host "Container provisionado com sucesso."
+
+        # ==========================================
+        # 9. VALIDAR ESTADO DE EXECUÇÃO
+        # ==========================================
+
+        Write-Host "Consultando estado do container..."
+
+        $containerState = az container show `
+            --resource-group $resourceGroup `
+            --name $aciName `
+            --query "containers[0].instanceView.currentState.state" `
+            --output tsv `
+            --only-show-errors
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Não foi possível consultar o estado de execução do container."
+        }
+
+        Write-Host "Estado do container: $containerState"
+
+        if ($containerState -ne "Running") {
+            Write-Host "O container não está em execução. Consultando logs..."
+
+            az container logs `
+                --resource-group $resourceGroup `
+                --name $aciName `
+                --only-show-errors
+
+            throw "O container foi provisionado, mas não está em execução."
+        }
+
+        # ==========================================
+        # 10. OBTER ENDEREÇO DA APLICAÇÃO
+        # ==========================================
+
+        $fqdn = az container show `
+            --resource-group $resourceGroup `
+            --name $aciName `
+            --query "ipAddress.fqdn" `
+            --output tsv `
+            --only-show-errors
+
+        if ($LASTEXITCODE -ne 0 -or
+            [string]::IsNullOrWhiteSpace($fqdn)) {
+            throw "O Azure não retornou um endereço FQDN para o container."
+        }
+
+        $deployedUrl = "http://${fqdn}:8080"
+
+        # ==========================================
+        # 11. PUBLICAR RESULTADO DO DEPLOY
+        # ==========================================
+
+        Write-Host "=========================================="
+        Write-Host "DEPLOY CONCLUÍDO COM SUCESSO"
+        Write-Host "=========================================="
+        Write-Host "Imagem: $image"
+        Write-Host "Estado: $containerState"
+        Write-Host "Provisionamento: $provisioningState"
+        Write-Host "Aplicação: $deployedUrl"
+        Write-Host "Swagger: $deployedUrl/swagger"
+        Write-Host "=========================================="
+
+        Write-Host "##vso[task.setvariable variable=DEPLOYED_URL]$deployedUrl"
+
+    env:
+      AZURE_RESOURCE_GROUP: $(AZURE_RESOURCE_GROUP)
+      ACR_NAME: $(ACR_NAME)
+      ACI_NAME: $(ACI_NAME)
+      ACI_DNS_LABEL: $(ACI_DNS_LABEL)
+      ORACLE_CONNECTION_STRING: $(ORACLE_CONNECTION_STRING)
+      JWT_KEY: $(JWT_KEY)
+      CI_RUN_ID: $(resources.pipeline.ci.runID)

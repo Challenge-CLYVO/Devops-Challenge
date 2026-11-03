@@ -1,0 +1,77 @@
+trigger:
+  branches:
+    include:
+      - master
+
+pr:
+  branches:
+    include:
+      - master
+
+pool:
+  name: Default
+
+variables:
+  buildConfiguration: Release
+  dockerRegistryServiceConnection: sc-petcare-acr
+  imageRepository: petcare-api
+  solutionPath: API/Challenge.sln
+  apiProjectPath: API/PetCare.API/PetCare.API.csproj
+  dockerfilePath: API/Dockerfile
+
+steps:
+  - task: UseDotNet@2
+    displayName: Install .NET 9 SDK
+    inputs:
+      packageType: sdk
+      version: 9.x
+
+  - script: dotnet restore $(solutionPath)
+    displayName: Restore dependencies
+
+  - script: dotnet build $(solutionPath) --configuration $(buildConfiguration) --no-restore
+    displayName: Build solution
+
+  - script: >
+      dotnet test $(solutionPath)
+      --configuration $(buildConfiguration)
+      --no-build
+      --logger "trx;LogFileName=petcare-tests.trx"
+      --results-directory $(Agent.TempDirectory)/TestResults
+    displayName: Run automated tests
+    env:
+      Jwt__Key: CI-ONLY-TEST-KEY-DO-NOT-USE-IN-PRODUCTION-123456
+      ConnectionStrings__RecommendaContextOracle: Data Source=localhost:1521/orcl;User ID=ci;Password=ci;
+
+  - task: PublishTestResults@2
+    displayName: Publish test results
+    condition: always()
+    inputs:
+      testResultsFormat: VSTest
+      testResultsFiles: '**/*.trx'
+      searchFolder: $(Agent.TempDirectory)/TestResults
+      failTaskOnFailedTests: true
+
+  - script: >
+      dotnet publish $(apiProjectPath)
+      --configuration $(buildConfiguration)
+      --no-build
+      --output $(Build.ArtifactStagingDirectory)/app
+    displayName: Publish API
+
+  - task: PublishPipelineArtifact@1
+    displayName: Publish pipeline artifact
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)/app
+      artifact: drop
+
+  - task: Docker@2
+    displayName: Build and push Docker image
+    inputs:
+      command: buildAndPush
+      containerRegistry: $(dockerRegistryServiceConnection)
+      repository: $(imageRepository)
+      Dockerfile: $(dockerfilePath)
+      buildContext: API
+      tags: |
+        $(Build.BuildId)
