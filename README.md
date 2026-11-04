@@ -214,7 +214,7 @@ O vídeo apresenta o funcionamento do projeto, a configuração da solução e o
 
 **Vídeo de demonstração no YouTube:**
 
-[INSERIR LINK DO VÍDEO NO YOUTUBE]
+Link: https://www.youtube.com/watch?v=4Q7KMWOYS2I
 
 ## Autores
 
